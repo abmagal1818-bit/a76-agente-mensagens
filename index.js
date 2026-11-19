@@ -38,10 +38,18 @@ const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const INSTAGRAM_TOKEN = process.env.INSTAGRAM_TOKEN;
-const INSTAGRAM_ACCOUNT_ID = "17841407009898490";
-const NUMERO_AUGUSTO = process.env.NUMERO_AUGUSTO || "5551993716729";
+const INSTAGRAM_ACCOUNT_ID = process.env.INSTAGRAM_ACCOUNT_ID || ""; // A DEFINIR: conta Instagram da A76 Motors
+const NUMERO_AUGUSTO = process.env.NUMERO_AUGUSTO || TELEFONE_CONSULTOR; // A DEFINIR: numero do consultor humano da A76 (antes hardcoded com o numero pessoal do Augusto na Premium)
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
+
+// ===== Identidade da A76 Motors (placeholders - preencher antes de ir para producao) =====
+const NOME_IA = process.env.NOME_IA || "A DEFINIR"; // nome da IA/atendente (equivalente a "Sara"/"${NOME_IA}" na Premium)
+const NOME_EMPRESA = process.env.NOME_EMPRESA || "A76 Motors";
+const SITE_EMPRESA = process.env.SITE_EMPRESA || "a76motors.com.br";
+const TELEFONE_CONSULTOR = process.env.TELEFONE_CONSULTOR || ""; // A DEFINIR: telefone humano para escalonamento/consultor da A76
+const SUPABASE_SCHEMA = process.env.SUPABASE_SCHEMA || "a76";
+const BASE_URL = process.env.BASE_URL || "https://a76-agente-mensagens.onrender.com"; // A DEFINIR quando o servico Render for criado
 
 const COOKIE_NOME_TOKEN = "sarah_painel_auth";
 
@@ -79,7 +87,7 @@ app.use("/registrar", exigirToken);
 console.log("SUPABASE_URL:", SUPABASE_URL ? "OK" : "VAZIA");
 console.log("SUPABASE_KEY:", SUPABASE_KEY ? "OK" : "VAZIA");
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, { db: { schema: SUPABASE_SCHEMA } });
 
 async function enviarWhatsApp(telefone, corpo) {
   const resp = await axios.post(
@@ -193,9 +201,9 @@ async function notificarFalhaApiClaude(erro, contexto = "") {
 
   let motivoAmigavel = "Erro desconhecido na API da Anthropic.";
   if (mensagemErro?.toLowerCase().includes("credit balance is too low")) {
-    motivoAmigavel = "🚨 *SEM CRÉDITO NA API DA ANTHROPIC!*\nA Sarah PAROU de responder aos clientes. Adicione fundos em console.anthropic.com > Billing.";
+    motivoAmigavel = "🚨 *SEM CRÉDITO NA API DA ANTHROPIC!*\nA ${NOME_IA} PAROU de responder aos clientes. Adicione fundos em console.anthropic.com > Billing.";
   } else if (status === 401) {
-    motivoAmigavel = "🚨 *Chave de API inválida/expirada!*\nA Sarah parou de funcionar. Verifique a CLAUDE_API_KEY no Render.";
+    motivoAmigavel = "🚨 *Chave de API inválida/expirada!*\nA ${NOME_IA} parou de funcionar. Verifique a CLAUDE_API_KEY no Render.";
   } else if (status === 429) {
     motivoAmigavel = "⚠️ *Limite de requisições (rate limit) atingido.*\nAlgumas respostas podem estar atrasando.";
   } else if (status >= 500) {
@@ -428,7 +436,7 @@ async function notificarDadosCredito(telefone, dados) {
   const numero = telefone.replace(/\D/g, "");
   const formatado = numero.length >= 12 ? `+${numero.slice(0,2)} (${numero.slice(2,4)}) ${numero.slice(4,9)}-${numero.slice(9)}` : telefone;
   const linkSeguro = PAINEL_TOKEN
-    ? `https://agente-mensagens1.onrender.com/painel/simulacoes?token=${PAINEL_TOKEN}`
+    ? `${BASE_URL}/painel/simulacoes?token=${PAINEL_TOKEN}`
     : null;
   const msg = `📋 *Simulação de crédito solicitada*
 Cliente: ${formatado}
@@ -664,7 +672,7 @@ async function bloquearSeParcelaSemSimulacaoReal(telefone, reply) {
   console.warn(`[Crédito] 🚨 Bloqueado: resposta tentou confirmar parcelas pra ${telefone} sem resultado real da financeira (simulação ainda pendente).`);
   try {
     const numero = telefone.replace(/\D/g, "");
-    await enviarTexto(NUMERO_AUGUSTO, `⚠️ *Sara tentou confirmar parcelas de financiamento sem simulação real*\nCliente: ${numero}\nA simulação de crédito desse cliente ainda está PENDENTE (nenhum resultado real informado). Bloqueei a mensagem automaticamente pra não passar valor errado.\nSe já tiver o resultado da financeira, responda: SIMULACAO ${numero} [resultado]`);
+    await enviarTexto(NUMERO_AUGUSTO, `⚠️ *${NOME_IA} tentou confirmar parcelas de financiamento sem simulação real*\nCliente: ${numero}\nA simulação de crédito desse cliente ainda está PENDENTE (nenhum resultado real informado). Bloqueei a mensagem automaticamente pra não passar valor errado.\nSe já tiver o resultado da financeira, responda: SIMULACAO ${numero} [resultado]`);
   } catch (e) {
     console.error("[Crédito] Erro ao notificar bloqueio de parcela:", e.message);
   }
@@ -880,9 +888,9 @@ async function verificarPropostaForaDoPreco(from, reply, veiculo) {
 Cliente: ${formatado}
 Veiculo: *${info.veiculo || "nao identificado"}*
 Preco de tabela: R$ ${precoTabela}
-Sara ia confirmar: *R$ ${proposta.total}* (${info.pagamento})
+${NOME_IA} ia confirmar: *R$ ${proposta.total}* (${info.pagamento})
 
-A Sara NAO enviou essa condicao ao cliente — esta aguardando sua decisao.
+A ${NOME_IA} NAO enviou essa condicao ao cliente — esta aguardando sua decisao.
 Responda:
 ✅ *AUTORIZO* — para autorizar
 ❌ *NEGO* — para negar`;
@@ -1322,17 +1330,17 @@ async function gerarMensagemFollowUp(followup) {
     const veiculo = followup.veiculo_interesse || "nossos veículos";
     const nivel = followup.nivel || 1;
     const promptsSumiu = {
-      1: `Você é Sarah, vendedora da Premium Automarcas. Cliente parou de responder sobre ${veiculo} há poucos dias. Mensagem curta e leve para retomar, sem cobrar. Máximo 2 linhas.`,
-      2: `Você é Sarah, vendedora da Premium Automarcas. Cliente sumiu depois de demonstrar interesse no ${veiculo}. Mencione que o carro ainda está disponível e pergunte se ainda tem interesse. Máximo 3 linhas.`,
-      3: `Você é Sarah, vendedora da Premium Automarcas. Última tentativa de retomar contato sobre o ${veiculo} — cliente sumiu há mais de uma semana. Pergunte de forma direta e educada se ainda tem interesse, para não insistir mais se não tiver. Máximo 2 linhas.`
+      1: `Você é ${NOME_IA}, vendedora da ${NOME_EMPRESA}. Cliente parou de responder sobre ${veiculo} há poucos dias. Mensagem curta e leve para retomar, sem cobrar. Máximo 2 linhas.`,
+      2: `Você é ${NOME_IA}, vendedora da ${NOME_EMPRESA}. Cliente sumiu depois de demonstrar interesse no ${veiculo}. Mencione que o carro ainda está disponível e pergunte se ainda tem interesse. Máximo 3 linhas.`,
+      3: `Você é ${NOME_IA}, vendedora da ${NOME_EMPRESA}. Última tentativa de retomar contato sobre o ${veiculo} — cliente sumiu há mais de uma semana. Pergunte de forma direta e educada se ainda tem interesse, para não insistir mais se não tiver. Máximo 2 linhas.`
     };
     const prompts = {
-      vai_pensar: `Você é Sarah, vendedora da Premium Automarcas. Cliente interessado em ${veiculo} disse que ia pensar. Mensagem curta e calorosa, sem pressionar. Máximo 3 linhas.`,
-      achou_caro: `Você é Sarah, vendedora da Premium Automarcas. Cliente achou ${veiculo} caro. Pergunte qual parcela cabe no orçamento. Máximo 3 linhas.`,
-      avaliacao_baixa: `Você é Sarah, vendedora da Premium Automarcas. Cliente insatisfeito com avaliação na troca. Reforce que avaliação presencial pode surpreender. Máximo 3 linhas.`,
-      sem_interesse: `Você é Sarah, vendedora da Premium Automarcas. Cliente sem interesse. Mensagem muito leve. Máximo 2 linhas.`,
+      vai_pensar: `Você é ${NOME_IA}, vendedora da ${NOME_EMPRESA}. Cliente interessado em ${veiculo} disse que ia pensar. Mensagem curta e calorosa, sem pressionar. Máximo 3 linhas.`,
+      achou_caro: `Você é ${NOME_IA}, vendedora da ${NOME_EMPRESA}. Cliente achou ${veiculo} caro. Pergunte qual parcela cabe no orçamento. Máximo 3 linhas.`,
+      avaliacao_baixa: `Você é ${NOME_IA}, vendedora da ${NOME_EMPRESA}. Cliente insatisfeito com avaliação na troca. Reforce que avaliação presencial pode surpreender. Máximo 3 linhas.`,
+      sem_interesse: `Você é ${NOME_IA}, vendedora da ${NOME_EMPRESA}. Cliente sem interesse. Mensagem muito leve. Máximo 2 linhas.`,
       sumiu: promptsSumiu[nivel] || promptsSumiu[1],
-      visita_nao_confirmada: `Você é Sarah, vendedora da Premium Automarcas. O cliente tinha agendado uma visita pra loja sobre o ${veiculo} mas não temos confirmação de que ele veio. Mensagem tipo "Verifiquei que não conseguiu comparecer no horário agendado. Gostaria de reagendar?" — natural, sem cobrar, sugerindo reagendar pra mais tarde ou outro dia. Máximo 3 linhas.`
+      visita_nao_confirmada: `Você é ${NOME_IA}, vendedora da ${NOME_EMPRESA}. O cliente tinha agendado uma visita pra loja sobre o ${veiculo} mas não temos confirmação de que ele veio. Mensagem tipo "Verifiquei que não conseguiu comparecer no horário agendado. Gostaria de reagendar?" — natural, sem cobrar, sugerindo reagendar pra mais tarde ou outro dia. Máximo 3 linhas.`
     };
     const instrucaoFormato = "\n\nIMPORTANTE: responda APENAS com o texto puro da mensagem que sera enviada direto pro cliente no WhatsApp. NAO inclua titulo, cabecalho (nada de \"# Mensagem...\"), marcacao markdown, comentarios explicando a abordagem, nem mais de uma opcao/alternativa de mensagem. So a mensagem final, pronta pra mandar, nada antes nem depois dela.";
     const res = await axios.post("https://api.anthropic.com/v1/messages",
@@ -1349,7 +1357,7 @@ async function gerarMensagemFollowUp(followup) {
 function limparMensagemFollowUp(texto) {
   if (!texto) return texto;
   let t = String(texto).trim();
-  // remove cabecalho markdown tipo "# Mensagem..." ou "# Mensagem de Sarah - Premium Automarcas" na primeira linha
+  // remove cabecalho markdown tipo "# Mensagem..." ou "# Mensagem de ${NOME_IA} - ${NOME_EMPRESA}" na primeira linha
   t = t.replace(/^#{1,3}\s*mensagem[^\n]*\n+/i, "").trim();
   // se o modelo mandou mais de uma opcao separada por "---", fica só com a primeira
   const partesSeparador = t.split(/\n\s*-{3,}\s*\n/);
@@ -1482,7 +1490,7 @@ async function notificarAugusto(from, texto, primeiraVez = false) {
   ultimaNotificacao[from] = agora;
   const numero = from.replace(/\D/g, "");
   const formatado = numero.length >= 12 ? `+${numero.slice(0,2)} (${numero.slice(2,4)}) ${numero.slice(4,9)}-${numero.slice(9)}` : from;
-  const mensagem = `${primeiraVez ? "🆕 *Novo cliente*" : "📩 *Mensagem*"}\nNúmero: ${formatado}\n"${String(texto).substring(0, 100)}"\n\nhttps://agente-mensagens1.onrender.com/painel`;
+  const mensagem = `${primeiraVez ? "🆕 *Novo cliente*" : "📩 *Mensagem*"}\nNúmero: ${formatado}\n"${String(texto).substring(0, 100)}"\n\n${BASE_URL}/painel`;
   try {
     await axios.post(`https://graph.facebook.com/v25.0/${PHONE_NUMBER_ID}/messages`,
       { messaging_product: "whatsapp", to: NUMERO_AUGUSTO, text: { body: mensagem } },
@@ -1549,7 +1557,7 @@ async function notificarFollowUpVeiculoVendido(telefone, veiculo) {
 async function notificarFotoComAnalise(from, imageBuffer, mimeType, analise, caption = "") {
   const numero = from.replace(/\D/g, "");
   const formatado = numero.length >= 12 ? `+${numero.slice(0,2)} (${numero.slice(2,4)}) ${numero.slice(4,9)}-${numero.slice(9)}` : from;
-  const legenda = `📸 *Foto recebida de ${formatado}*${caption ? `\nLegenda do cliente: "${caption}"` : ""}\n\n*Analise da Sarah:*\n${analise}`;
+  const legenda = `📸 *Foto recebida de ${formatado}*${caption ? `\nLegenda do cliente: "${caption}"` : ""}\n\n*Analise da ${NOME_IA}:*\n${analise}`;
   try {
     const formData = new FormData();
     formData.append("file", Buffer.from(imageBuffer), { filename: "foto.jpg", contentType: mimeType });
@@ -1579,7 +1587,7 @@ async function notificarFotoComAnalise(from, imageBuffer, mimeType, analise, cap
       console.error(`[Foto→Consultor] Erro tambem no fallback de texto:`, e2.message);
       try {
         await supabase.from("alertas_pendentes").insert({
-          texto: `📸 *Falha ao repassar foto de troca*\nCliente: ${formatado}\n${caption ? `Legenda: "${caption}"\n` : ""}\n*Analise da Sarah:*\n${analise}\n\n⚠️ Nem a imagem nem o texto chegaram ao WhatsApp do consultor (erro: ${e2.message}). Confira a conversa no CRM.`
+          texto: `📸 *Falha ao repassar foto de troca*\nCliente: ${formatado}\n${caption ? `Legenda: "${caption}"\n` : ""}\n*Analise da ${NOME_IA}:*\n${analise}\n\n⚠️ Nem a imagem nem o texto chegaram ao WhatsApp do consultor (erro: ${e2.message}). Confira a conversa no CRM.`
         });
       } catch (e3) { console.error("[Foto→Consultor] Erro ao salvar alerta pendente:", e3.message); }
       await registrarEnvioFotoConsultor(from, analise, caption, false, e2.message);
@@ -1717,7 +1725,7 @@ setInterval(sincronizarEstoque, 30 * 60 * 1000);
 
 setInterval(async () => {
   try {
-    await axios.get("https://agente-mensagens1.onrender.com");
+    await axios.get("${BASE_URL}");
     console.log("[KeepAlive] ✅ Ativo");
   } catch (e) { console.error("[KeepAlive] Erro:", e.message); }
 }, 10 * 60 * 1000);
@@ -2085,7 +2093,7 @@ function bloquearAdjetivoZeradoComKmAlto(reply, historicoTexto) {
 const SYSTEM_PROMPT = (fipeInfo, aprendizadosExtra = "", carroNaoDisponivel = null, descontoPendenteAtivo = false, veiculosAmbiguos = null, modeloMencionado = null, versaoIncerta = null, veiculoAtual = null) => {
   const agora = new Date();
   const dataHoraAtual = agora.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-  return `Você é Sarah, vendedora da Premium Automarcas, revendedora de veículos usados em Porto Alegre/RS.
+  return `Você é ${NOME_IA}, vendedora da ${NOME_EMPRESA}, revendedora de veículos usados em Porto Alegre/RS.
 
 DATA E HORA ATUAL: ${dataHoraAtual} (horário de Porto Alegre/RS)
 - Use essa informação para saber se é manhã, tarde, noite, ou outro dia.
@@ -2194,7 +2202,7 @@ QUANDO DISSER "VOU PENSAR": Pergunte o que ficou na dúvida antes de encerrar.
 🚨 CNH — REGRA CRÍTICA: Se o cliente mencionar espontaneamente que não tem CNH (carteira de motorista), antes ou fora da coleta estruturada de dados de financiamento, você NUNCA deve dar conselhos, sugestões ou alternativas por conta própria (não sugira renovar a CNH, não sugira juntar uma entrada como alternativa, não invente outras ideias). Apenas confirme educadamente que anotou a informação e que o consultor vai avaliar as opções com ele — nada além disso. Essa decisão (a qual financeira encaminhar, alternativas de negociação) é exclusivamente do consultor humano. Se a coleta de dados de financiamento ainda não tiver perguntado sobre CNH, o sistema já inclui essa pergunta automaticamente na etapa correta — você não precisa (e não deve) perguntar por conta própria fora desse fluxo.
 
 REGRAS ABSOLUTAS:
-- Primeira msg: "Oi! 😊 Aqui é a Sarah da Premium Automarcas!"
+- Primeira msg: "Oi! 😊 Aqui é a ${NOME_IA} da ${NOME_EMPRESA}!"
 - Máximo 4 linhas
 - NUNCA pergunte sobre financiamento sem o cliente mencionar
 - NUNCA invente links ou use tags XML
@@ -2449,8 +2457,8 @@ async function processarComandoConsultor(from, text) {
   await limparDescontoPendente();
 
   const registroDesconto = autorizado
-    ? `[Sistema: desconto AUTORIZADO pelo consultor em ${new Date().toLocaleString("pt-BR")}. Sarah já confirmou ao cliente que conseguimos a condição especial${valorSolicitado ? ` de R$ ${valorSolicitado}` : " combinada"}. NUNCA negar que o desconto foi aprovado. Se o cliente perguntar, confirmar que sim, o desconto foi aprovado.]`
-    : `[Sistema: desconto NEGADO pelo consultor em ${new Date().toLocaleString("pt-BR")}. Sarah já informou ao cliente que o preço está firme${valorMinimo ? `, mas que o valor mínimo possível para esse veículo é R$ ${valorMinimo}` : ""}.]`;
+    ? `[Sistema: desconto AUTORIZADO pelo consultor em ${new Date().toLocaleString("pt-BR")}. ${NOME_IA} já confirmou ao cliente que conseguimos a condição especial${valorSolicitado ? ` de R$ ${valorSolicitado}` : " combinada"}. NUNCA negar que o desconto foi aprovado. Se o cliente perguntar, confirmar que sim, o desconto foi aprovado.]`
+    : `[Sistema: desconto NEGADO pelo consultor em ${new Date().toLocaleString("pt-BR")}. ${NOME_IA} já informou ao cliente que o preço está firme${valorMinimo ? `, mas que o valor mínimo possível para esse veículo é R$ ${valorMinimo}` : ""}.]`;
   await salvarMensagem(telefoneCliente, "sistema", registroDesconto);
 
   const msgSistema = autorizado
@@ -3061,7 +3069,7 @@ async function processarFotosAgrupadas(from, analises) {
   await processarMensagemNaFila(from, texto);
 }
 
-app.get("/", (req, res) => res.send("Sarah CRM funcionando! ✅"));
+app.get("/", (req, res) => res.send("${NOME_IA} CRM funcionando! ✅"));
 app.get("/estoque", (req, res) => res.json({ total: estoqueAtual.length, ultimaAtualizacao, veiculos: estoqueAtual }));
 app.get("/sincronizar", async (req, res) => { res.send("Iniciado!"); await sincronizarEstoque(); });
 app.get("/testar-supabase", async (req, res) => {
@@ -3075,11 +3083,11 @@ app.get("/diagnostico", async (req, res) => {
   try {
     const { data } = await supabase.from("clientes").select("count").limit(1);
     res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="background:#000;color:#fff;font-family:monospace;padding:20px">
-<h2 style="color:#f0a500">Diagnóstico Sarah CRM</h2>
+<h2 style="color:#f0a500">Diagnóstico ${NOME_IA} CRM</h2>
 <p>Supabase: ✅ OK</p>
 <p id="r">Testando fetch...</p>
 <script>
-fetch('https://agente-mensagens1.onrender.com/crm')
+fetch('${BASE_URL}/crm')
 .then(r => { document.getElementById('r').textContent = 'Fetch /crm: ✅ HTTP ' + r.status; return r.json(); })
 .then(d => {
 const total = Object.values(d).reduce((a,b) => a + b.length, 0);
@@ -3149,7 +3157,7 @@ ${!f.enviado ? `
     const veiculosOpts = estoqueAtual.map(v => `<option value="${limparTexto(v.modelo || "")} ${v.ano || ""}">${limparTexto(v.modelo || "")} ${v.ano || ""}</option>`).join("");
 
     const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Follow-ups — Sarah CRM</title>
+<title>Follow-ups — ${NOME_IA} CRM</title>
 <style>body{margin:0;font-family:-apple-system,sans-serif;background:#0a0a0a;color:#e0e0e0}
 header{background:#111;border-bottom:1px solid #222;padding:12px 16px;position:sticky;top:0;display:flex;align-items:center;gap:10px;z-index:10}
 </style></head><body>
@@ -3216,7 +3224,7 @@ app.post("/followups/criar", async (req, res) => {
 app.get("/testar-notificacao", async (req, res) => {
   try {
     await axios.post(`https://graph.facebook.com/v25.0/${PHONE_NUMBER_ID}/messages`,
-      { messaging_product: "whatsapp", to: NUMERO_AUGUSTO, text: { body: "✅ Sarah funcionando!" } },
+      { messaging_product: "whatsapp", to: NUMERO_AUGUSTO, text: { body: "✅ ${NOME_IA} funcionando!" } },
       { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}`, "Content-Type": "application/json" } }
     );
     res.json({ ok: true });
@@ -3464,7 +3472,7 @@ app.get("/painel", async (req, res) => {
 
     const html = '<!DOCTYPE html><html lang="pt-BR"><head>' +
       '<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
-      '<title>Sarah CRM</title>' +
+      '<title>${NOME_IA} CRM</title>' +
       '<style>body{margin:0;font-family:-apple-system,sans-serif;background:#0a0a0a;color:#e0e0e0}' +
       'a{color:inherit}header{background:#111;border-bottom:1px solid #222;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0}' +
       '.dot{width:8px;height:8px;background:#4caf50;border-radius:50%;display:inline-block;margin-right:6px;animation:p 2s infinite}' +
@@ -3473,7 +3481,7 @@ app.get("/painel", async (req, res) => {
       '.board{display:flex;gap:12px;padding:14px;overflow-x:auto;-webkit-overflow-scrolling:touch}' +
       '</style></head><body>' +
       '<header>' +
-      '<h1 style="font-size:16px;color:#fff;font-weight:700;margin:0">Sarah <span style="color:#f0a500">CRM</span>' +
+      '<h1 style="font-size:16px;color:#fff;font-weight:700;margin:0">${NOME_IA} <span style="color:#f0a500">CRM</span>' +
       (pendente ? '<span class="badge">💰 1 desconto</span>' : '') +
       (alertasPendentesCount > 0 ? '<span class="badge" style="background:#f44336">⚠️ ' + alertasPendentesCount + ' alerta(s)</span>' : '') + '</h1>' +
       '<div style="font-size:12px;color:#888"><span class="dot"></span>' + totalLeads + ' leads</div>' +
@@ -3571,12 +3579,12 @@ app.get("/painel/alertas", async (req, res) => {
         '</div>';
     }).join('');
 
-    const html = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Alertas pendentes — Sarah CRM</title>' +
+    const html = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Alertas pendentes — ${NOME_IA} CRM</title>' +
       '<style>body{margin:0;font-family:-apple-system,sans-serif;background:#0a0a0a;color:#e0e0e0}a{color:inherit}' +
       'header{background:#111;border-bottom:1px solid #222;padding:12px 16px;position:sticky;top:0;display:flex;align-items:center;gap:10px}</style></head><body>' +
       '<header><a href="/painel" style="color:#f0a500;text-decoration:none;font-size:20px">←</a><h1 style="font-size:16px;color:#fff;font-weight:700;margin:0">⚠️ Alertas pendentes</h1></header>' +
       '<div style="padding:14px">' +
-      '<p style="font-size:12px;color:#888;margin-top:0">Notificações que não puderam ser enviadas ao seu WhatsApp porque fazia mais de 24h que você não escrevia para o número da Sarah. Mande qualquer mensagem para o número da Sarah para reabrir a janela.</p>' +
+      '<p style="font-size:12px;color:#888;margin-top:0">Notificações que não puderam ser enviadas ao seu WhatsApp porque fazia mais de 24h que você não escrevia para o número da ${NOME_IA}. Mande qualquer mensagem para o número da ${NOME_IA} para reabrir a janela.</p>' +
       (itensHtml || '<p style="color:#555;text-align:center;padding:20px">Nenhum alerta pendente 🎉</p>') +
       '</div>' +
       '<script>' +
@@ -3626,7 +3634,7 @@ app.post("/notificar-lead", async (req, res) => {
     const numero = String(telefone).replace(/\D/g, "");
     const formatado = numero.length >= 12 ? `+${numero.slice(0,2)} (${numero.slice(2,4)}) ${numero.slice(4,9)}-${numero.slice(9)}` : telefone;
     const linkWhatsApp = `https://wa.me/${numero}`;
-    const msg = `🔔 *Novo lead — ${portal || "Portal"}*\nNome: *${nome || "Não informado"}*\nFone: ${formatado}\nVeículo: *${veiculo || "Não informado"}*${mensagem ? `\nMensagem: "${mensagem.substring(0, 150)}"` : ""}\n\nFalar com lead: ${linkWhatsApp}\nhttps://agente-mensagens1.onrender.com/painel`;
+    const msg = `🔔 *Novo lead — ${portal || "Portal"}*\nNome: *${nome || "Não informado"}*\nFone: ${formatado}\nVeículo: *${veiculo || "Não informado"}*${mensagem ? `\nMensagem: "${mensagem.substring(0, 150)}"` : ""}\n\nFalar com lead: ${linkWhatsApp}\n${BASE_URL}/painel`;
     await enviarTexto(NUMERO_AUGUSTO, msg);
     console.log(`[Lead] ✅ Notificação enviada: ${formatado} — ${veiculo}`);
     try { const { data: existenteCRM } = await supabase.from("clientes").select("id").eq("telefone", numero).limit(1); const payloadCRM = { telefone: numero, nome: nome || undefined, veiculo_interesse: veiculo || undefined, ultima_interacao: new Date().toISOString() }; if (!existenteCRM || !existenteCRM.length) payloadCRM.estagio = "quente"; const { error: erroCRM } = await supabase.from("clientes").upsert(payloadCRM, { onConflict: "telefone" }); if (erroCRM) console.error("[Lead] ERRO ao gravar no CRM (Supabase):", erroCRM.message); else console.log("[Lead] OK gravado no CRM/painel:", numero); } catch (erroCRM) { console.error("[Lead] EXCECAO ao gravar no CRM (Supabase):", erroCRM.message); } res.json({ ok: true });
@@ -3745,11 +3753,11 @@ app.get("/painel/lista", async (req, res) => {
         '</a>';
     }).join('');
 
-    const html = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Conversas — Sarah CRM</title>' +
+    const html = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Conversas — ${NOME_IA} CRM</title>' +
       '<style>body{margin:0;font-family:-apple-system,sans-serif;background:#0a0a0a;color:#e0e0e0}a{color:inherit}' +
       'header{background:#111;border-bottom:1px solid #222;padding:12px 16px;position:sticky;top:0}' +
       '.tabs{padding:10px 16px;background:#0f0f0f;border-bottom:1px solid #1a1a1a;display:flex;gap:10px}</style></head><body>' +
-      '<header><h1 style="font-size:16px;color:#fff;font-weight:700;margin:0">Sarah <span style="color:#f0a500">CRM</span></h1></header>' +
+      '<header><h1 style="font-size:16px;color:#fff;font-weight:700;margin:0">${NOME_IA} <span style="color:#f0a500">CRM</span></h1></header>' +
       '<div class="tabs"><a href="/painel" style="color:#888;font-size:12px;text-decoration:none">📋 Pipeline</a>' +
       '<a href="/painel/lista" style="color:#f0a500;font-size:12px;font-weight:600;text-decoration:none">💬 Conversas</a>' +
       '<a href="/painel/simulacao-manual" style="color:#888;font-size:12px;text-decoration:none">💳 Simulações</a></div>' +
@@ -3799,7 +3807,7 @@ app.get("/painel/chat/:tel", async (req, res) => {
       const alinha = tipo === 'client' || tipo === 'client_foto' ? 'flex-start' : 'flex-end';
       const bg = (tipo === 'client' || tipo === 'client_foto') ? '#1e1e1e' : tipo === 'sara' || tipo === 'sara_fotos' ? '#1a3a1a' : tipo === 'sistema' ? '#1a1a2e' : '#2a1a00';
       const cor = (tipo === 'client' || tipo === 'client_foto') ? '#ddd' : tipo === 'sara' || tipo === 'sara_fotos' ? '#b8e6b8' : tipo === 'sistema' ? '#555' : '#f0c060';
-      const label = (tipo === 'client' || tipo === 'client_foto') ? '👤 Cliente' : tipo === 'sara' || tipo === 'sara_fotos' ? '🤖 Sarah' : tipo === 'sistema' ? '⚙️ Sistema' : '⚡ Você';
+      const label = (tipo === 'client' || tipo === 'client_foto') ? '👤 Cliente' : tipo === 'sara' || tipo === 'sara_fotos' ? '🤖 ${NOME_IA}' : tipo === 'sistema' ? '⚙️ Sistema' : '⚡ Você';
 
       let conteudo = '';
       if (tipo === 'sara_fotos') {
@@ -3907,7 +3915,7 @@ app.get("/painel/chat/:tel", async (req, res) => {
       '<div class="msgs">' + (msgsHtml || '<p style="color:#555;text-align:center;padding:20px">Sem mensagens</p>') + '</div>' +
       '<form action="/painel/enviar" method="POST">' +
       '<input type="hidden" name="tel" value="' + tel + '">' +
-      '<textarea name="texto" placeholder="Enviar como Sarah..."></textarea>' +
+      '<textarea name="texto" placeholder="Enviar como ${NOME_IA}..."></textarea>' +
       '<button type="submit">→</button>' +
       '</form>' +
       '<div id="lightbox" onclick="fecharFoto()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:999;align-items:center;justify-content:center;cursor:zoom-out">' +
@@ -4213,7 +4221,7 @@ app.get("/painel/simulacao-manual", (req, res) => {
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
-      <title>Simulações — Sarah CRM</title>
+      <title>Simulações — ${NOME_IA} CRM</title>
       <style>
         body { margin:0; font-family:-apple-system,sans-serif; background:#0a0a0a; color:#e0e0e0; }
         a { color:inherit; }
@@ -4227,7 +4235,7 @@ app.get("/painel/simulacao-manual", (req, res) => {
       </style>
     </head>
     <body>
-      <header><h1 style="font-size:16px;color:#fff;font-weight:700;margin:0">Sarah <span style="color:#f0a500">CRM</span></h1></header>
+      <header><h1 style="font-size:16px;color:#fff;font-weight:700;margin:0">${NOME_IA} <span style="color:#f0a500">CRM</span></h1></header>
       ${tabsCrm("/painel/simulacao-manual")}
       <div class="conteudo">
         <h2>💳 Simulação Multi-Banco</h2>
@@ -4284,7 +4292,7 @@ app.post("/painel/simulacao-manual", async (req, res) => {
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width,initial-scale=1">
-        <title>Resultado — Sarah CRM</title>
+        <title>Resultado — ${NOME_IA} CRM</title>
         <style>
           body { margin:0; font-family:-apple-system,sans-serif; background:#0a0a0a; color:#e0e0e0; }
           a { color:inherit; }
@@ -4295,7 +4303,7 @@ app.post("/painel/simulacao-manual", async (req, res) => {
         </style>
       </head>
       <body>
-        <header><h1 style="font-size:16px;color:#fff;font-weight:700;margin:0">Sarah <span style="color:#f0a500">CRM</span></h1></header>
+        <header><h1 style="font-size:16px;color:#fff;font-weight:700;margin:0">${NOME_IA} <span style="color:#f0a500">CRM</span></h1></header>
         ${tabsCrm("/painel/simulacao-manual")}
         <div class="conteudo">
           <h2 style="color:#fff;font-size:18px;margin:0 0 4px">Resultado — ${nome || cpf}</h2>
